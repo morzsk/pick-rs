@@ -40,6 +40,12 @@ impl State {
     }
 }
 
+fn format_entry(entry: &str, is_cursor: bool, is_selected: bool) -> String {
+    let prefix = if is_cursor { ">" } else { " " };
+    let marker = if is_selected { "[x]" } else { " - " };
+    format!("{} {} {}\r\n", prefix, marker, entry)
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let dir = std::path::PathBuf::from(&args[0]);
@@ -68,13 +74,7 @@ fn main() {
         for (i, entry) in state.entries.iter().enumerate() {
             let is_cursor = i == state.cursor;
             let is_selected = state.selected.contains(&i);
-            let prefix = if is_cursor { ">" } else { " " };
-            let marker = if is_selected { "[x]" } else { " - " };
-            execute!(
-                stdout(),
-                Print(format!("{} {} {}\r\n", prefix, marker, entry))
-            )
-            .unwrap();
+            execute!(stdout(), Print(format_entry(entry, is_cursor, is_selected))).unwrap();
         }
 
         if let Event::Key(key) = event::read().unwrap() {
