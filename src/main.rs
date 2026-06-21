@@ -1,5 +1,5 @@
 use crossterm::{
-    cursor::MoveTo,
+    cursor::{self, MoveTo},
     event::{self, Event, KeyCode},
     execute,
     style::Print,
@@ -68,16 +68,22 @@ fn main() {
 
     enable_raw_mode().expect("failed to enable raw mode");
 
+    let (col, row) = cursor::position().expect("failed to get cursor position");
+    // todo: handle case where cursor is moved
+    // todo: use tty (I think) for cleaner piping
+
     loop {
-        execute!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, 1)).unwrap();
+        execute!(stdout(), MoveTo(col, row), Clear(ClearType::FromCursorDown))
+            .expect("failed to clear and move cursor");
 
         for (i, entry) in state.entries.iter().enumerate() {
             let is_cursor = i == state.cursor;
             let is_selected = state.selected.contains(&i);
-            execute!(stdout(), Print(format_entry(entry, is_cursor, is_selected))).unwrap();
+            execute!(stdout(), Print(format_entry(entry, is_cursor, is_selected)))
+                .expect("failed to print entry");
         }
 
-        if let Event::Key(key) = event::read().unwrap() {
+        if let Event::Key(key) = event::read().expect("failed to read event") {
             match key.code {
                 KeyCode::Char('q') => break,
                 KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => state.move_up(),
