@@ -8,23 +8,22 @@ use crossterm::{
 use std::collections::HashSet;
 use std::io::stdout;
 
-struct State {
-    entries: Vec<String>,
+struct Selection {
     cursor: usize,
     selected: HashSet<usize>,
 }
 
-impl State {
-    fn move_up(&mut self) {
+impl Selection {
+    fn move_up(&mut self, len: usize) {
         if self.cursor == 0 {
-            self.cursor = self.entries.len() - 1;
+            self.cursor = len - 1;
         } else {
             self.cursor -= 1;
         }
     }
 
-    fn move_down(&mut self) {
-        if self.cursor == self.entries.len() - 1 {
+    fn move_down(&mut self, len: usize) {
+        if self.cursor == len - 1 {
             self.cursor = 0;
         } else {
             self.cursor += 1;
@@ -60,8 +59,7 @@ fn main() {
         })
         .collect();
 
-    let mut state = State {
-        entries,
+    let mut selection = Selection {
         cursor: 0,
         selected: HashSet::new(),
     };
@@ -76,9 +74,9 @@ fn main() {
         execute!(stdout(), MoveTo(col, row), Clear(ClearType::FromCursorDown))
             .expect("failed to clear and move cursor");
 
-        for (i, entry) in state.entries.iter().enumerate() {
-            let is_cursor = i == state.cursor;
-            let is_selected = state.selected.contains(&i);
+        for (i, entry) in entries.iter().enumerate() {
+            let is_cursor = i == selection.cursor;
+            let is_selected = selection.selected.contains(&i);
             execute!(stdout(), Print(format_entry(entry, is_cursor, is_selected)))
                 .expect("failed to print entry");
         }
@@ -86,9 +84,13 @@ fn main() {
         if let Event::Key(key) = event::read().expect("failed to read event") {
             match key.code {
                 KeyCode::Char('q') => break,
-                KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => state.move_up(),
-                KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => state.move_down(),
-                KeyCode::Char(' ') => state.toggle_selected(),
+                KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => {
+                    selection.move_up(entries.len())
+                }
+                KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => {
+                    selection.move_down(entries.len())
+                }
+                KeyCode::Char(' ') => selection.toggle_selected(),
                 _ => {}
             }
         }
@@ -96,7 +98,7 @@ fn main() {
 
     disable_raw_mode().expect("failed to disable raw mode");
 
-    for i in state.selected {
-        println!("{}", state.entries[i]);
+    for i in selection.selected {
+        println!("{}", entries[i]);
     }
 }
