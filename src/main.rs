@@ -76,9 +76,6 @@ fn main() {
     enable_raw_mode().expect("failed to enable raw mode");
 
     let (col, row) = cursor::position().expect("failed to get cursor position");
-    // todo:
-    //  1. stop using cursor::position
-    //  2. wait for or fork https://github.com/crossterm-rs/crossterm/pull/1044
     queue!(tty, cursor::Hide).expect("failed to hide cursor");
     // todo: handle case where cursor is moved
 
