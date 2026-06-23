@@ -1,29 +1,31 @@
 use crossterm::{
     cursor::{self, MoveTo},
     event::{self, Event, KeyCode},
-    execute,
+    queue,
     style::Print,
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use std::collections::HashSet;
-use std::io::stdout;
+use std::fs::OpenOptions;
+use std::io::{BufWriter, Write};
 
 struct Selection {
     cursor: usize,
     selected: HashSet<usize>,
+    length: usize,
 }
 
 impl Selection {
-    fn move_up(&mut self, len: usize) {
+    fn move_up(&mut self) {
         if self.cursor == 0 {
-            self.cursor = len - 1;
+            self.cursor = self.length - 1;
         } else {
             self.cursor -= 1;
         }
     }
 
-    fn move_down(&mut self, len: usize) {
-        if self.cursor == len - 1 {
+    fn move_down(&mut self) {
+        if self.cursor == self.length - 1 {
             self.cursor = 0;
         } else {
             self.cursor += 1;
@@ -62,40 +64,50 @@ fn main() {
     let mut selection = Selection {
         cursor: 0,
         selected: HashSet::new(),
+        length: entries.len(),
     };
+
+    let tty = OpenOptions::new()
+        .write(true)
+        .open("/dev/tty")
+        .expect("failed to open /dev/tty");
+    let mut tty = BufWriter::new(tty);
 
     enable_raw_mode().expect("failed to enable raw mode");
 
     let (col, row) = cursor::position().expect("failed to get cursor position");
+    // todo:
+    //  1. stop using cursor::position
+    //  2. wait for or fork https://github.com/crossterm-rs/crossterm/pull/1044
+    queue!(tty, cursor::Hide).expect("failed to hide cursor");
     // todo: handle case where cursor is moved
-    // todo: use tty (I think) for cleaner piping
 
     loop {
-        execute!(stdout(), MoveTo(col, row), Clear(ClearType::FromCursorDown))
+        queue!(tty, MoveTo(col, row), Clear(ClearType::FromCursorDown))
             .expect("failed to clear and move cursor");
 
         for (i, entry) in entries.iter().enumerate() {
             let is_cursor = i == selection.cursor;
             let is_selected = selection.selected.contains(&i);
-            execute!(stdout(), Print(format_entry(entry, is_cursor, is_selected)))
+            queue!(tty, Print(format_entry(entry, is_cursor, is_selected)))
                 .expect("failed to print entry");
         }
+
+        tty.flush().expect("failed to flush tty");
 
         if let Event::Key(key) = event::read().expect("failed to read event") {
             match key.code {
                 KeyCode::Char('q') => break,
-                KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => {
-                    selection.move_up(entries.len())
-                }
-                KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => {
-                    selection.move_down(entries.len())
-                }
+                KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => selection.move_up(),
+                KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => selection.move_down(),
                 KeyCode::Char(' ') => selection.toggle_selected(),
                 _ => {}
             }
         }
     }
 
+    queue!(tty, cursor::Show).expect("failed to show cursor");
+    tty.flush().expect("failed to flush tty");
     disable_raw_mode().expect("failed to disable raw mode");
 
     for i in selection.selected {
