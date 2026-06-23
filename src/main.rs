@@ -1,30 +1,31 @@
 use crossterm::{
-    cursor::MoveTo,
+    cursor::{self, MoveTo},
     event::{self, Event, KeyCode},
-    execute,
+    queue,
     style::Print,
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use std::collections::HashSet;
-use std::io::stdout;
+use std::fs::OpenOptions;
+use std::io::{BufWriter, Write};
 
-struct State {
-    entries: Vec<String>,
+struct Selection {
     cursor: usize,
     selected: HashSet<usize>,
+    length: usize,
 }
 
-impl State {
+impl Selection {
     fn move_up(&mut self) {
         if self.cursor == 0 {
-            self.cursor = self.entries.len() - 1;
+            self.cursor = self.length - 1;
         } else {
             self.cursor -= 1;
         }
     }
 
     fn move_down(&mut self) {
-        if self.cursor == self.entries.len() - 1 {
+        if self.cursor == self.length - 1 {
             self.cursor = 0;
         } else {
             self.cursor += 1;
@@ -38,6 +39,12 @@ impl State {
             self.selected.insert(self.cursor);
         }
     }
+}
+
+fn format_entry(entry: &str, is_cursor: bool, is_selected: bool) -> String {
+    let prefix = if is_cursor { ">" } else { " " };
+    let marker = if is_selected { "[x]" } else { " - " };
+    format!("{} {} {}\r\n", prefix, marker, entry)
 }
 
 fn main() {
@@ -54,43 +61,53 @@ fn main() {
         })
         .collect();
 
-    let mut state = State {
-        entries,
+    let mut selection = Selection {
         cursor: 0,
         selected: HashSet::new(),
+        length: entries.len(),
     };
+
+    let tty = OpenOptions::new()
+        .write(true)
+        .open("/dev/tty")
+        .expect("failed to open /dev/tty");
+    let mut tty = BufWriter::new(tty);
 
     enable_raw_mode().expect("failed to enable raw mode");
 
-    loop {
-        execute!(stdout(), Clear(ClearType::FromCursorDown), MoveTo(0, 1)).unwrap();
+    let (col, row) = cursor::position().expect("failed to get cursor position");
+    queue!(tty, cursor::Hide).expect("failed to hide cursor");
+    // todo: handle case where cursor is moved
 
-        for (i, entry) in state.entries.iter().enumerate() {
-            let is_cursor = i == state.cursor;
-            let is_selected = state.selected.contains(&i);
-            let prefix = if is_cursor { ">" } else { " " };
-            let marker = if is_selected { "[x]" } else { " - " };
-            execute!(
-                stdout(),
-                Print(format!("{} {} {}\r\n", prefix, marker, entry))
-            )
-            .unwrap();
+    loop {
+        queue!(tty, MoveTo(col, row), Clear(ClearType::FromCursorDown))
+            .expect("failed to clear and move cursor");
+
+        for (i, entry) in entries.iter().enumerate() {
+            let is_cursor = i == selection.cursor;
+            let is_selected = selection.selected.contains(&i);
+            queue!(tty, Print(format_entry(entry, is_cursor, is_selected)))
+                .expect("failed to print entry");
         }
 
-        if let Event::Key(key) = event::read().unwrap() {
+        tty.flush().expect("failed to flush tty");
+
+        if let Event::Key(key) = event::read().expect("failed to read event") {
             match key.code {
                 KeyCode::Char('q') => break,
-                KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => state.move_up(),
-                KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => state.move_down(),
-                KeyCode::Char(' ') => state.toggle_selected(),
+                KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => selection.move_up(),
+                KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => selection.move_down(),
+                KeyCode::Char(' ') => selection.toggle_selected(),
                 _ => {}
             }
         }
     }
 
+    queue!(tty, cursor::Show).expect("failed to show cursor");
+    tty.flush().expect("failed to flush tty");
     disable_raw_mode().expect("failed to disable raw mode");
 
-    for i in state.selected {
-        println!("{}", state.entries[i]);
+    for i in selection.selected {
+        println!("{}", entries[i]);
     }
 }
