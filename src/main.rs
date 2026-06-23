@@ -5,41 +5,10 @@ use crossterm::{
     style::Print,
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
+use pick::Selection;
 use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
-
-struct Selection {
-    cursor: usize,
-    selected: HashSet<usize>,
-    length: usize,
-}
-
-impl Selection {
-    fn move_up(&mut self) {
-        if self.cursor == 0 {
-            self.cursor = self.length - 1;
-        } else {
-            self.cursor -= 1;
-        }
-    }
-
-    fn move_down(&mut self) {
-        if self.cursor == self.length - 1 {
-            self.cursor = 0;
-        } else {
-            self.cursor += 1;
-        }
-    }
-
-    fn toggle_selected(&mut self) {
-        if self.selected.contains(&self.cursor) {
-            self.selected.remove(&self.cursor);
-        } else {
-            self.selected.insert(self.cursor);
-        }
-    }
-}
 
 fn format_entry(entry: &str, is_cursor: bool, is_selected: bool) -> String {
     let prefix = if is_cursor { ">" } else { " " };
