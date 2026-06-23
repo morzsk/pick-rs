@@ -48,18 +48,7 @@ fn format_entry(entry: &str, is_cursor: bool, is_selected: bool) -> String {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let dir = std::path::PathBuf::from(&args[0]);
-
-    let entries: Vec<String> = std::fs::read_dir(&dir)
-        .expect("failed to read dir")
-        .map(|e| {
-            e.expect("failed to read entry")
-                .file_name()
-                .to_string_lossy()
-                .to_string()
-        })
-        .collect();
+    let entries: Vec<String> = std::env::args().skip(1).collect();
 
     let mut selection = Selection {
         cursor: 0,
